@@ -31,7 +31,7 @@ async def test_apply_commands():
     calls = []
 
     class Bot:
-        async def set_my_commands(self, commands, language_code=None):
+        async def set_my_commands(self, commands, scope=None, language_code=None):
             calls.append((language_code, [(c.command, c.description) for c in commands]))
 
     pytest.importorskip("telegram")
@@ -79,3 +79,62 @@ async def test_reporter_posts_and_never_raises():
     update = SimpleNamespace(effective_chat=SimpleNamespace(id=5))
     await reporter.handler()(update, SimpleNamespace(bot=Bot(), error=ValueError("y")))
     assert "SimpleNamespace in chat 5" in sent[-1]["text"]
+
+
+def test_check_finds_every_kind_of_problem(tmp_path):
+    from ptbkit.check import main, problems
+
+    strings_dir = tmp_path / "strings"
+    strings_dir.mkdir()
+    (strings_dir / "en.json").write_text('{"hello": "Hi {name}", "bye": "Bye", "old": "x", "command.start": "Start"}')
+    (strings_dir / "de.json").write_text('{"hello": "Hallo {nam}", "bye": "Tschüss {", "old": "x", "command.start": "Los", "extra": "y"}')
+    code = tmp_path / "bot.py"
+    code.write_text('t(lang, "hello")\nstrings.get(lang, "bye")\nt(lang, "nope")\n')
+    found = problems(Strings(strings_dir), code)
+    text = "\n".join(found)
+    assert "de.json has 'extra'" in text
+    assert "placeholders ['nam']" in text
+    assert "'bye' is not a valid format string" in text
+    assert "the code uses 'nope'" in text
+    assert "'old' is not used" in text
+    assert "command.start" not in text  # built at runtime
+    assert main([str(strings_dir), str(code)]) == 1
+
+
+def test_check_passes_for_complete_translations():
+    from ptbkit.check import assert_complete, problems
+
+    strings = Strings(Path(__file__).parent / "res" / "strings")
+    code = Path(__file__).parent / "code"
+    found = problems(strings, code)
+    assert "de.json lacks 'bye'" in found and any("typo" in line for line in found)
+    with pytest.raises(AssertionError, match="Translation problems"):
+        assert_complete(strings, code)
+
+
+def test_check_clean():
+    from ptbkit.check import assert_complete
+
+    assert_complete(Strings(Path(__file__).parent / "complete"), Path(__file__).parent / "code")
+
+
+def test_chat_id_and_scope():
+    from ptbkit import chat_id
+
+    assert chat_id("1234567890") == -1001234567890 and chat_id(-100123) == -100123 and chat_id(None) is None
+    assert ErrorReporter("x", "1234567890", 0).chat_id == -1001234567890
+    assert ErrorReporter("x", "1234567890", 0).thread_id is None
+
+
+async def test_apply_commands_scope():
+    pytest.importorskip("telegram")
+    from telegram import BotCommandScopeChat
+
+    scopes = []
+
+    class Bot:
+        async def set_my_commands(self, commands, scope=None, language_code=None):
+            scopes.append((language_code, scope))
+
+    await STRINGS.apply_commands(Bot(), ["start"], scope=BotCommandScopeChat(5))
+    assert all(scope.chat_id == 5 for _, scope in scopes)

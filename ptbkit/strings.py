@@ -52,11 +52,12 @@ class Strings:
         keys = set(self.table[self.default])
         return {lang: sorted(set(table) - keys) for lang, table in self.table.items() if lang != self.default}
 
-    async def apply_commands(self, bot: Any, names: Iterable[str], prefix: str = "command.") -> None:
-        """Sets the command menu in every language from `command.<name>` keys (setMyCommands)."""
+    async def apply_commands(self, bot: Any, names: Iterable[str], prefix: str = "command.", scope: Any = None) -> None:
+        """Sets the command menu in every language from `command.<name>` keys (setMyCommands), for
+        everyone or for a `scope` such as `BotCommandScopeChat(admin_id)`."""
         from telegram import BotCommand
 
         names = list(names)
         for lang in self.table:
             commands = [BotCommand(name, self.get(lang, prefix + name)) for name in names]
-            await bot.set_my_commands(commands, language_code=None if lang == self.default else lang)
+            await bot.set_my_commands(commands, scope=scope, language_code=None if lang == self.default else lang)

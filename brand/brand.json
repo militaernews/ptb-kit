@@ -1,0 +1,6 @@
+{
+  "name": "PTB-KIT",
+  "icon": "kit",
+  "tagline": ["Shared pieces for", "python-telegram-bot bots."],
+  "tags": "TRANSLATIONS · SAFE LOGS · ERROR REPORTS"
+}

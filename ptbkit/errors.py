@@ -24,13 +24,24 @@ def format_error(name: str, error: BaseException, context: str | None = None, li
     return text if len(text) <= MAX_MESSAGE else text[: MAX_MESSAGE - 7] + "…</pre>"
 
 
+def chat_id(value: int | str | None) -> int | None:
+    """A group id as Telegram wants it: `1234567890` (as copied from some clients) → `-1001234567890`."""
+    if value in (None, "", 0, "0"):
+        return None
+    number = int(value)
+    return int(f"-100{number}") if number > 0 else number
+
+
+normalize_chat_id = chat_id
+
+
 class ErrorReporter:
     """Posts errors to `chat_id` (and topic `thread_id`); without a chat it only logs them."""
 
-    def __init__(self, name: str, chat_id: int | None = None, thread_id: int | None = None) -> None:
+    def __init__(self, name: str, chat_id: int | str | None = None, thread_id: int | None = None) -> None:
         self.name = name
-        self.chat_id = chat_id
-        self.thread_id = thread_id
+        self.chat_id = normalize_chat_id(chat_id)
+        self.thread_id = thread_id or None
 
     async def report(self, bot: Any, error: BaseException, context: str | None = None) -> bool:
         logger.error("%s: %s", context or "Unhandled error", error, exc_info=error)
